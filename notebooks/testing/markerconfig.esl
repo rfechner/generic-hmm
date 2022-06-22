@@ -1,0 +1,50 @@
+"""
+This file is concerned with declaring the abstract syntax of a .ini file used
+to declare the properties and metadata of a dataset, which is then used for the construction
+of the Hidden Markov Model.
+
+Please note that we are using literal Strings (like ',') in this definition.
+"""
+
+type markerconfig = metainfo # configdeclaration*;
+type metainfo = '[markerconfig_metainfo]' # metadeclaration*;
+type configdeclaration = '[' # title ']' # relations # datatype # optional*;
+
+type relations = 'relations=' # '[' # relation* # ']';
+type relation = '(' # relationType # ',' # relatedTo # ')';
+type relatedTo = title;
+type relationType = string;
+
+type datatype = 'dtype=' # dtype;
+
+symbol discrete : -> dtype;
+symbol continuous : -> dtype;
+
+symbol integer : 'int' -> discrete;
+symbol float : 'float' -> discrete;
+symbol string : 'str' -> discrete;
+symbol boolean : 'bool' -> discrete;
+symbol date : 'date' -> discrete;
+
+symbol linspace : 'linspace' # '(' # from # ',' # to # ',' # num # ')' -> continuous;
+symbol date_range : 'date_range' # '(' # start # ',' # end # ',' # num # ')' -> continuous;
+symbol layerName : 'layerName=' # string -> optional;
+symbol layerSpecificWeight : 'layerSpecificWeight=' # float -> optional;
+
+type from = float;
+type to = float;
+type num = int;
+
+type start = date;
+type end = date;
+
+type title = string;
+type date = year # '-' # month # '-' # day
+
+type year = string;
+type month = string;
+type day = string;
+
+
+symbol groupby : 'groupby=' # title -> metadeclaration;
+symbol dateinfo : 'dateinfo=' '(' title # ',' # date # ',' # date # ')' -> metadeclaration;
