@@ -1,6 +1,6 @@
 # Pipeline for the generic generation of a HMM-based prediction model for multivariate sequences
 
-This repository holds the (public) files for my bachelors thesis 'Generic Generation of Hidden Markov Models and an Application to Medical Data'. 
+This repository holds files for my bachelors thesis 'Generic Generation of Hidden Markov Models and an Application to Medical Data'. 
 
 ## What is the purpose of this repository?
 
