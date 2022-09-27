@@ -6,7 +6,7 @@ class AbstractController(ABC):
         pass
 
     @abstractmethod
-    def plot_anterior_distribution(self, *args, **kwargs):
+    def plot_stationary_distribution(self, *args, **kwargs):
         pass
 
     @abstractmethod

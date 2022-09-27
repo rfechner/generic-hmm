@@ -23,6 +23,21 @@ class Controller(AbstractController):
                                   layers : [str],
                                   hidden_marker : str,
                                   timesteps : int):
+        """
+
+        This function returns a rough estimate of the stationary distribution, extrapolated for some t timesteps,
+        following an observation. Please refer to the paper for additional information.
+
+        For any unclear notation, please refer to the paper included in the repository (Section 3.1 Notation)
+
+        @param path_to_observation: string path to the observation .csv file
+        @param csv_delimiter: delimiter contained in the precified .csv file
+        @param layers: a list of strings, containing layer-names, the layers the algorithms is supposed to
+                        use for prediction
+        @param hidden_marker: M_{\mathcal{H}} -> the hidden marker or the name of the predicted quantity
+        @param timesteps: the number of additional timesteps the posteriors should be extrapolated for
+
+        """
 
         if not self.initialized:
             print("Controller was not initialized yet.")
@@ -52,6 +67,21 @@ class Controller(AbstractController):
 
     def __optimal_state_sequence(self, path_to_observation : str, csv_delimiter : str, layers : [str], hidden_marker : str):
 
+        """
+        This function returns a weighted prediction result. For each prediction marker inside the layers the viterbi algorithm is used
+        to find the most likely hidden state sequence, then all results are weighted according to the weights supplied inside the .ini
+        configuration file.
+
+        For any unclear notation, please refer to the paper included in the repository (Section 3.1 Notation)
+
+        @param path_to_observation: string path to the observation .csv file
+        @param csv_delimiter: delimiter contained in the precified .csv file
+        @param layers: a list of strings, containing layer-names, the layers the algorithms is supposed to
+                        use for prediction
+        @param hidden_marker: M_{\mathcal{H}} -> the hidden marker or the name of the predicted quantity
+
+        """
+
         if not self.initialized:
             print("Controller was not initialized yet.")
             return
@@ -72,6 +102,21 @@ class Controller(AbstractController):
 
     def __calc_post_distr(self, path_to_observation: str, csv_delimiter: str, layers: [str],
                                     hidden_marker: str):
+
+        """
+        This function returns a weighted prediction result. For each prediction marker inside the layers the forward algorithm is used
+        to find the posteriors for the hidden states for a given observation.
+
+        For any unclear notation, please refer to the paper included in the repository (Section 3.1 Notation)
+
+        @param path_to_observation: string path to the observation .csv file
+        @param csv_delimiter: delimiter contained in the precified .csv file
+        @param layers: a list of strings, containing layer-names, the layers the algorithms is supposed to
+                        use for prediction
+        @param hidden_marker: M_{\mathcal{H}} -> the hidden marker or the name of the predicted quantity
+
+        """
+
         if not self.initialized:
             print("Controller was not initialized yet.")
             return
@@ -89,11 +134,24 @@ class Controller(AbstractController):
                                                   observation=observation)
         return distr
 
-    def plot_anterior_distribution(self, path_to_observation : str,
-                                    csv_delimiter : str,
-                                    layers : [str],
-                                    hidden_marker : str,
-                                    timesteps : int):
+    def plot_stationary_distribution(self, path_to_observation : str,
+                                     csv_delimiter : str,
+                                     layers : [str],
+                                     hidden_marker : str,
+                                     timesteps : int):
+
+        """
+        This function returns a visulaization of an approximation towards
+        the stationary distribution of the underlying Markov Chain
+
+        @param path_to_observation: string path to the observation .csv file
+        @param csv_delimiter: delimiter contained in the precified .csv file
+        @param layers: a list of strings, containing layer-names, the layers the algorithms is supposed to
+                        use for prediction
+        @param hidden_marker: M_{\mathcal{H}} -> the hidden marker or the name of the predicted quantity
+        @param timesteps: the number of additional timesteps the posteriors should be extrapolated for
+
+        """
 
 
         anterior_distr = self.__approx_stationary_distr(path_to_observation=path_to_observation,
@@ -154,6 +212,19 @@ class Controller(AbstractController):
                                     layers : [str],
                                     hidden_marker : str):
 
+        """
+
+        @param path_to_observation: string path to the observation .csv file
+        @param csv_delimiter: delimiter contained in the precified .csv file
+        @param layers: a list of strings, containing layer-names, the layers the algorithms is supposed to
+                        use for prediction
+        @param hidden_marker: M_{\mathcal{H}} -> the hidden marker or the name of the predicted quantity
+
+
+        @returns a new pandas dataframe, in which the hidden markers predicted optimal state sequence is added to the observation.
+
+        """
+
         opt_seq = self.__optimal_state_sequence(path_to_observation=path_to_observation,
                                                 csv_delimiter=csv_delimiter,
                                                 layers=layers,
@@ -171,6 +242,18 @@ class Controller(AbstractController):
                                     csv_delimiter : str,
                                     layers : [str],
                                     hidden_marker : str):
+
+        """
+        @param path_to_observation: string path to the observation .csv file
+        @param csv_delimiter: delimiter contained in the precified .csv file
+        @param layers: a list of strings, containing layer-names, the layers the algorithms is supposed to
+                        use for prediction
+        @param hidden_marker: M_{\mathcal{H}} -> the hidden marker or the name of the predicted quantity
+
+
+        @returns a visualization of the posterior distribution over the hidden states for each single timestep inside
+        a given observaion sequence.
+        """
 
         distr = self.__calc_post_distr(path_to_observation=path_to_observation,
                                        csv_delimiter=csv_delimiter,
@@ -190,6 +273,15 @@ class Controller(AbstractController):
         return distr
 
     def construct(self, path_to_data : str, path_to_config : str, csv_delimiter = ","):
+
+        """
+        @param path_to_data: string path to a .csv file containing the multivariate time series
+        @param path_to_config: string path to a .ini configuration file conforming to an abstract syntax specified in
+                                the thesis (See appendix A) provided with this repository.
+        @param csv_delimiter: delimiter contained in the precified .csv file
+
+        @returns: the constructed HMM-based model
+        """
         self.prep = Preprocessor(debug=self.debug)
         self.prep.process(path_to_config=path_to_config,
                      path_to_data=path_to_data,
@@ -205,6 +297,15 @@ class Controller(AbstractController):
         return self.model
 
     def validate(self, path_to_validation_data : str, csv_delimiter : str, layers : [str], hidden_marker : str):
+        """
+        @param path_to_validation_data: string path to a .csv file containing the multivariate time series
+        @param csv_delimiter: delimiter contained in the precified .csv file
+        @param layers: a list of strings, containing layer-names, the layers the algorithms is supposed to
+                        use for prediction
+        @param hidden_marker: M_{\mathcal{H}} -> the hidden marker or the name of the predicted quantity
+
+        @returns: the multiclass f1-score.
+        """
         if not self.initialized:
             print("Controller was not initialized yet.")
             return
@@ -233,12 +334,23 @@ class Controller(AbstractController):
                             layers :[str],
                             hidden_marker : str):
 
+        """
+        @param k: the parameter k in k-fold-validation.
+        @param path_to_data: string path to a .csv file containing the multivariate time series
+        @param path_to_config: string path to a .ini configuration file conforming to an abstract syntax specified in
+                                the thesis (See appendix A) provided with this repository.
+        @param csv_delimiter: delimiter contained in the precified .csv file
+        @param layers: a list of strings, containing layer-names, the layers the algorithms is supposed to
+                        use for prediction
+        @param hidden_marker: M_{\mathcal{H}} -> the hidden marker or the name of the predicted quantity
+
+        @returns: the multiclass f1-scores.
+        """
+
         temp_dir_name = os.path.join(os.curdir, "TEMP_FOLDER")
 
         if not os.path.isdir(temp_dir_name):
             os.mkdir(temp_dir_name)
-        else:
-            raise RuntimeError(f"temporal folder {temp_dir_name} already exists. Please delete the folder and try again.")
 
         cparser = configparser.ConfigParser()
         cparser.read(path_to_config)
