@@ -115,6 +115,40 @@ class Controller(AbstractController):
         return anterior_distr
 
 
+    def __check_seq_validity(self, optimal_sequence : np.ndarray, hidden_marker : str):
+        """
+        @param opt_seq: the optimal sequence determined by the __optimal_state_sequence method, not yet checked for validity
+        @returns None
+
+        This method raises an error in case the determined optimal sequence has invalid state transitions.
+        This might happen, as we have no guarantee for soundness of the result received from the weighting
+        for the predictions of individual prediction-layers.
+
+        """
+
+
+        # for every state transition inside the sequence seq:
+        # check if the entry of the transition matrix m[seq[i-1],seq[i]] > 0.
+        # If this is not the case, we have found an invalid state transition inside our "optimal" result. -> raise
+
+
+        m = self.pv.transition_matrix(marker=hidden_marker)
+
+        for i in range(1, len(optimal_sequence)):
+
+            if not m[optimal_sequence[i-1], optimal_sequence[i]] > 0:
+
+                readable_sequence = self.pv.decode(marker=hidden_marker, series=optimal_sequence)
+
+                raise ValueError("Optimal state sequence prediction is invalid. There was an invalid state transition between\n"
+                                 f"state {optimal_sequence[i-1]} and {optimal_sequence[i]} found in the predicted sequence. Halting prediction process.\n"
+                                 f"The predicted sequence is: {readable_sequence}")
+        pass
+
+
+
+
+
     def optimal_state_sequence(self, path_to_observation : str,
                                     csv_delimiter : str,
                                     layers : [str],
@@ -124,6 +158,8 @@ class Controller(AbstractController):
                                                 csv_delimiter=csv_delimiter,
                                                 layers=layers,
                                                 hidden_marker=hidden_marker)
+
+        self.__check_seq_validity(optimal_sequence=opt_seq, hidden_marker=hidden_marker)
 
         decoded_sequence = self.pv.decode(hidden_marker, opt_seq)
 
