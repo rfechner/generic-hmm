@@ -8,7 +8,7 @@ The data consisting of the different observations made in the form of a .csv fil
 
 
 <p align="center">
-  <img src="docs/source/pipeline.png" height="250">
+  <img src="source/pipeline.png" height="250">
 </p>
 
 The abstract syntax outlines the correct way of specifying a .ini file required to construct a model, whilst making no assumption about the form of the data. It is written in a metalanguage called Backus Naur Form or BNF for short. Each marker in the data which the user wants to be integrated into the model must be specified as a section inside the .ini file. Additionally, information about the datatype, related layer, and layer-specific weight of the marker must be supplied as a key-value pair under the corresponding markers section. Optional information, like the relationship to other markers, can be added.
@@ -74,7 +74,7 @@ It should be noted that, although the definition of a marker calls for the exist
 Pre-processing is a modular stage inside the pipeline, which itself is a small pipeline. The transformation of the data supplied includes the analysis of the .ini file, deletion of any unnecessary data, the grouping of the data according to the metainformation extracted from the .ini file, enforcing measurement interval consistency if necessary, and finally encoding the data into a less memory intensive format.
 
 <p align="center">
-  <img src="docs/source/pipeline2.png" height="250">
+  <img src="source/pipeline2.png" height="250">
 </p>
 
  The label encoding transformation is a standard procedure ensuring a stable workflow as well as providing a point of standardized contact with the following components (or interface for short), at which the single previous or latter components of the pipeline might be easily switched out or modified. This practice ensures modularity, besides reducing the amount of memory used to store the observation sequences. For convenience, the whole pre-processing is fully automated and can be called in a few lines of code:
@@ -96,7 +96,7 @@ prep.process(path_to_config=path_to_config,
 The Feature Extraction builds upon the previous step in the pipeline, the pre-processing. Just as the prior component of the pipeline, the feature extraction component is fully modularized implementing the necessary interface used to provide the required functionality to the next part in the pipeline. Inside the feature extraction stage, the **state transition**-, **signal emission**- and **initial state**-probabilities are extracted from the encoded data supplied by the pre-processing stage. This is an important step since we can use the extracted probabilities later on to construct HMMs with a strong initial guess for $\mathcal{A}, \mathcal{B}$ and $\pi$.
 
 <p align="center">
-  <img src="docs/source/pipeline3.png" height="250">
+  <img src="source/pipeline3.png" height="250">
 </p>
 
 Again, for convenience, the feature extraction can be written in a few lines of code.
