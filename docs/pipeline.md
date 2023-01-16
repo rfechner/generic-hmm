@@ -6,6 +6,11 @@ The prediction pipeline was written in Python, making use of the ``hmmlearn`` li
 
 The data consisting of the different observations made in the form of a .csv file, as well as the configuration of the model in the form of a .ini file, must be supplied by the user. The .ini file must conform to a given abstract syntax which we will discuss in the following.
 
+
+<p align="center">
+  <img src="docs/source/pipeline.png" height="250">
+</p>
+
 The abstract syntax outlines the correct way of specifying a .ini file required to construct a model, whilst making no assumption about the form of the data. It is written in a metalanguage called Backus Naur Form or BNF for short. Each marker in the data which the user wants to be integrated into the model must be specified as a section inside the .ini file. Additionally, information about the datatype, related layer, and layer-specific weight of the marker must be supplied as a key-value pair under the corresponding markers section. Optional information, like the relationship to other markers, can be added.
 
 An important aspect of the data is the grouping of observations and the measurement interval. The user can specify the group key or primary key of the data, by which each observation instance is identified, as well as a maximum time delta in between two consecutive measurements under the meta-information section as key-value pairs. Omitting both key-value pairs will result in an interpretation of the data as one large observation sequence, where the consistency of the length of the time intervals in between observations is unimportant. Of course, this is not advised, as the time interval between observations does matter a lot for most cases. Inconsistencies in this regard are sure to distort results, or at least lessen the value of any made prediction by the model.
@@ -68,6 +73,10 @@ It should be noted that, although the definition of a marker calls for the exist
 
 Pre-processing is a modular stage inside the pipeline, which itself is a small pipeline. The transformation of the data supplied includes the analysis of the .ini file, deletion of any unnecessary data, the grouping of the data according to the metainformation extracted from the .ini file, enforcing measurement interval consistency if necessary, and finally encoding the data into a less memory intensive format.
 
+<p align="center">
+  <img src="docs/source/pipeline2.png" height="250">
+</p>
+
  The label encoding transformation is a standard procedure ensuring a stable workflow as well as providing a point of standardized contact with the following components (or interface for short), at which the single previous or latter components of the pipeline might be easily switched out or modified. This practice ensures modularity, besides reducing the amount of memory used to store the observation sequences. For convenience, the whole pre-processing is fully automated and can be called in a few lines of code:
 
 ```
@@ -85,3 +94,91 @@ prep.process(path_to_config=path_to_config,
 ## Feature Extraction
 
 The Feature Extraction builds upon the previous step in the pipeline, the pre-processing. Just as the prior component of the pipeline, the feature extraction component is fully modularized implementing the necessary interface used to provide the required functionality to the next part in the pipeline. Inside the feature extraction stage, the **state transition**-, **signal emission**- and **initial state**-probabilities are extracted from the encoded data supplied by the pre-processing stage. This is an important step since we can use the extracted probabilities later on to construct HMMs with a strong initial guess for $\mathcal{A}, \mathcal{B}$ and $\pi$.
+
+<p align="center">
+  <img src="docs/source/pipeline3.png" height="250">
+</p>
+
+Again, for convenience, the feature extraction can be written in a few lines of code.
+
+```
+from pvault import ProbabilityVault
+
+# build ontop of the already existing Preprocessor object
+pv = ProbabilityVault(prep, debug=False)
+pv.extract_probabilities()
+```
+
+## Model Validation and Query
+
+Finally, in the last step of the pipeline, the HMM-based model is constructed and queried. Building on top of the previously constructed feature extraction, the actual construction of the different HMMs is very convenient. In the implementation, we heavily rely on the hmm-learn library and its implementation of the Multinomial Hidden Markov Model. All that is left is the interpolation of the results given by the individual HMMs according to the weights specified inside the .ini config-file. To give a measure of success, the model is able to compute the multi-class $F_1$-Score for a given validation dataset. Model construction and validation can be executed in a few lines of code, as we will see below. 
+
+```
+import pandas as pd
+from model import RHMM
+
+path_to_validation_data = "./validation.csv"
+
+# load validation dataset, split into groups
+validation_df = pd.read_csv(path_to_validation_data, delimiter=',')
+validation_samples = prep.group_df(validation_df)
+
+
+# build model on top of already contructed ProbabilityVault object
+rhmm = RHMM(pv, debug=False)
+f1_score = rhmm.validate(   groups=validation_samples,
+                            layers=['layer1', 'layer2'],
+                            hidden_marker='marker1')
+
+```
+
+As already stated, it is important to understand that the HMM-based model can only offer predictions that a simple single observation HMM could offer as well. These predictions include the following:
+
+* **Posteriors for each hidden state for observation $\mathcal{O}$**  Given a Query $\mathcal{Q}$, compute the posterior distribution for each hidden state of $M_{\mathcal{H}}$ for every timestep $t$ given the trails $T_i$. The result will be a weighted sum (according to the weights defined in $\mathcal{Q}$) of the individually computed posteriors.
+* **Distribution over hidden states following $\mathcal{O}$**     Given a Query $\mathcal{Q}$, predict the distribution over the hidden states of $M_{\mathcal{H}}$ for possibly many timesteps $\hat{t}$ following the observation. This yields an approximation to a stationary distribution of the state transition matrix for $M_{\mathcal{H}}$. The kind of stationary distribution is dependent on the initial state distribution given by the observation sequence $\mathcal{O}$.
+* **Optimal state sequence**    Given a Query $\mathcal{Q}$, compute the optimal state sequence of $M_{\mathcal{H}}$ *best explaining* the trails $T_i$ using the Viterbi Algorithm.
+
+## Controller
+
+To wrap all of these components up, and use the whole pipeline, as well as enable plotting of the results, a wrapper object called \texttt{Controller} provides a user friendly interface.\vspace{0.5cm}
+
+```
+from controller import Controller
+
+# construct model
+c = Controller()
+c.construct(path_to_data="data.csv",
+            path_to_config="data.ini",
+            csv_delimiter=",")
+
+# validate model           
+c.validate(path_to_validation_data="validation.csv",
+           csv_delimiter=",",
+           hidden_marker="marker1",
+           layers=["layer1", "layer42"])
+
+# query model        
+c.plot_posterior_distribution(path_to_observation="single.csv",
+                            csv_delimiter=",", 
+                            hidden_marker="marker1", 
+                            layers=["layer1"])
+```
+
+In most cases, we would like to test the performance of our model on a specific dataset more rigorously. This is archived with the so-called *k*-fold cross validation, a way of reducing uncertainty over the performance of a model on a dataset. The model is continuously trained and tested on randomized parts of the whole dataset, resulting in multiple measurements of model performance. The Controller provides a simple method interface for the *k*-fold cross validation of a given dataset. 
+
+```
+from controller import Controller
+
+path_to_data = "data/train.csv"
+path_to_config = "data/train.ini"
+
+c = Controller()
+
+f1_scores = c.kfold_cross_validation(k = 10,
+                          path_to_data=path_to_data,
+                          path_to_config=path_to_config,
+                          csv_delimiter=',',
+                          layers=["layer1", "layer2", "layer3"],
+                          hidden_marker='hidden_marker')
+```
+
