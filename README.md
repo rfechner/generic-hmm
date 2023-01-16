@@ -4,19 +4,17 @@
   <img src="docs/source/logo.png" height="150">
 </p>
 
+Biomedical data often contains longitudinal data, for example biomedical information on disease progress. An important goal is to infer the unknown solely from observation. Hidden Markov Models (HMMs) have been successfully applied to the processing of possibly noisy continuous signals.
 
 This repository holds the code for a prediction tool that is able to construct a HMM-based model solely from multivariate data and a descriptive configuration file. The model construction is completely automated, for an example, please take a look at the included tutorial.ipynb file.
 
-# Overview
+# Background
 
-## What is the model able to predict?
+We provide a prediction pipeline system which processes data paired with a configuration file, enabling to construct, validate and query a fully parameterized HMM-based model. This is highly customable and accessible both to computer scientists and pracitcioners from other disciplines, for example biomedical research. The model is able to predict sequences of observable states from data. Thus, the model is able to provide any prediction capability that a HMM would offer as well, the difference being that this model predicts observable states.
 
-The model does not predict sequences of truly hidden states as a HMM would, but is able to predict sequences of observable states from data. Thus, the model
-is able to provide any prediction capability that a HMM would offer as well, the difference being that this model predicts observable states.
 
-For further details, please read Section 5.2 Model Capabilities and Usecases in the provided thesis.
-
-# Installation and Usage
+# Documentation
+## Installation and Usage
 
 1) Clone/Download this repository.
 2) Navigate to the folder on your machine using the commandline tool
@@ -32,6 +30,10 @@ pip install -r requirements.txt
 ```bash
 jupyter-notebook
 ```
+
+## Pipeline Documentation
+
+* See [Documentation](https://github.com/rfechner/generic-hmm/blob/main/docs/pipeline.md)
 
 # Contact, Supporters, Contributions and Contributing
 
