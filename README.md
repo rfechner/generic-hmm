@@ -40,6 +40,8 @@ The development of this work was carried out by several organizations:
 | Organization                                             | Grant           |
 |----------------------------------------------------------|---------------------------------|
 | [University of Koblenz](https://www.uni-koblenz-landau.de/de/koblenz/fb3/organisation/personen/mathe/rockenfeller/robert-rockenfeller-fb3)        | Postdoc fellowship of the German Academic Exchange Service (DAAD)   |
+| [University of Koblenz](https://www.uni-koblenz-landau.de/de/koblenz/fb3/organisation/personen/mathe/lehrbeauftragte/doepinghaus) | |
+| [German Center for Neurodegenerative Diseases (DZNE), Bonn, Germany](https://www.dzne.de/forschung/forschungsbereiche/klinische-forschung/forschungsgruppen/klockgether/gruppenmitglieder/) | |
 | University of the Sunshine Coast, Queensland, Australia | |
 | University of Queensland, Brisbane, Australia |  | 
 
@@ -54,4 +56,14 @@ https://github.com/rfechner/generic-hmm/issues/new.
 If you use this work, please cite:
 
 ```bibtex
+@article{dorpinghaus2022context,
+  title={Context mining and graph queries on giant biomedical knowledge graphs},
+  author={D{\"o}rpinghaus, Jens and Stefan, Andreas and Schultz, Bruce and Jacobs, Marc},
+  journal={Knowledge and Information Systems},
+  volume={64},
+  number={5},
+  pages={1239--1262},
+  year={2022},
+  publisher={Springer}
+}
 ```
