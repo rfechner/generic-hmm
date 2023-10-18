@@ -6,8 +6,8 @@ import pandas as pd
 import os
 
 from preprocessing import Preprocessor
-from pvault import ProbabilityVault
-from model import RHMM
+from feature_extractor import DirichletMap
+from model import MultipleObservationOMM
 from base.abstract_controller import AbstractController
 
 class Controller(AbstractController):
@@ -160,10 +160,10 @@ class Controller(AbstractController):
                                                         hidden_marker=hidden_marker,
                                                         timesteps = timesteps)
 
-        num_hidden_states = self.pv.num_states_for_marker(hidden_marker)
+        num_hidden_states = self.dirichlet_posterior.num_states_for_marker(hidden_marker)
         timesteps = anterior_distr.shape[1]
 
-        hidden_state_labels = self.pv.decode(marker=hidden_marker, series=list(range(num_hidden_states)))
+        hidden_state_labels = self.dirichlet_posterior.decode(marker=hidden_marker, series=list(range(num_hidden_states)))
         plt.stackplot(range(timesteps), anterior_distr, labels=hidden_state_labels)
         plt.xlabel("Timesteps")
         plt.ylabel(f"Distribution over marker {hidden_marker}")
@@ -183,20 +183,19 @@ class Controller(AbstractController):
         for the predictions of individual prediction-layers.
 
         """
-
-
+        
         # for every state transition inside the sequence seq:
         # check if the entry of the transition matrix m[seq[i-1],seq[i]] > 0.
         # If this is not the case, we have found an invalid state transition inside our "optimal" result. -> raise
 
 
-        m = self.pv.transition_matrix(marker=hidden_marker)
+        m = self.dirichlet_posterior.transition_matrix(marker=hidden_marker)
 
         for i in range(1, len(optimal_sequence)):
 
             if not m[optimal_sequence[i-1], optimal_sequence[i]] > 0:
 
-                readable_sequence = self.pv.decode(marker=hidden_marker, series=optimal_sequence)
+                readable_sequence = self.dirichlet_posterior.decode(marker=hidden_marker, series=optimal_sequence)
 
                 raise ValueError("Optimal state sequence prediction is invalid. There was an invalid state transition between\n"
                                  f"state {optimal_sequence[i-1]} and {optimal_sequence[i]} found in the predicted sequence. Halting prediction process.\n"
@@ -232,7 +231,7 @@ class Controller(AbstractController):
 
         self.__check_seq_validity(optimal_sequence=opt_seq, hidden_marker=hidden_marker)
 
-        decoded_sequence = self.pv.decode(hidden_marker, opt_seq)
+        decoded_sequence = self.dirichlet_posterior.decode(hidden_marker, opt_seq)
 
         df = pd.read_csv(path_to_observation, delimiter=csv_delimiter)
         df[f"Predicted state for {hidden_marker}"] = decoded_sequence
@@ -260,10 +259,10 @@ class Controller(AbstractController):
                                        layers=layers,
                                        hidden_marker=hidden_marker)
 
-        num_hidden_states = self.pv.num_states_for_marker(hidden_marker)
+        num_hidden_states = self.dirichlet_posterior.num_states_for_marker(hidden_marker)
         timesteps = distr.shape[1]
 
-        hidden_state_labels = self.pv.decode(marker=hidden_marker, series=list(range(num_hidden_states)))
+        hidden_state_labels = self.dirichlet_posterior.decode(marker=hidden_marker, series=list(range(num_hidden_states)))
         plt.stackplot(range(timesteps), distr, labels=hidden_state_labels)
         plt.xlabel("Timesteps")
         plt.ylabel(f"Distribution over marker {hidden_marker}")
@@ -287,10 +286,10 @@ class Controller(AbstractController):
                      path_to_data=path_to_data,
                      csv_delimiter=csv_delimiter)
 
-        self.pv = ProbabilityVault(self.prep, debug=self.debug)
-        self.pv.extract_probabilities()
+        self.dirichlet_posterior = DirichletMap(self.prep, debug=self.debug)
+        self.dirichlet_posterior.extract_probabilities()
 
-        self.model = RHMM(self.pv, debug=self.debug)
+        self.model = MultipleObservationOMM(self.dirichlet_posterior, debug=self.debug)
 
         self.initialized = True
 
@@ -425,7 +424,7 @@ class Controller(AbstractController):
 
 
     def __check_valid_layer_marker_combination(self, layers : [str], hidden_marker : str):
-        layerinfo = self.pv.get_layerinfo_from_layers(hidden_marker=hidden_marker, layers=layers)
+        layerinfo = self.dirichlet_posterior.get_layerinfo_from_layers(hidden_marker=hidden_marker, layers=layers)
 
         if len(layerinfo.keys()) == 0 or \
             sum([len(layerinfo[layername]['markers'].keys()) for layername in layerinfo.keys()]) == 0:

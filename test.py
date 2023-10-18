@@ -1,4 +1,4 @@
-from source.pyth.Model.controller import Controller
+from controller import Controller
 
 c = Controller()
 

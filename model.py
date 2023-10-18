@@ -4,28 +4,92 @@ import numpy as np
 
 from tqdm import tqdm
 from itertools import chain
-from pvault import ProbabilityVault
+from base.abstract_feature_extractor import AbstractFeatureExtractor
+from feature_extractor import DirichletMap
 from hmmlearn.hmm import CategoricalHMM
 from sklearn.metrics import f1_score
-
-
 from base.abstract_model import AbstractModel
 
 
-class RHMM(AbstractModel):
 
-    def __init__(self, pv: ProbabilityVault, debug=False):
+class MultipleObservationHMM(AbstractModel):
+    """
+        Let the hidden state x emit multiple observations y_i at each timestep t.
+        The random variables y_i come from **different** categorical distributions.
         
-        super().__init__(pv)
+        We can see, that y_is are conditionally independent from each other, once we condition on x.
+        Thus, we can calculate
 
-        self._pv = pv
+        $$
+            p(x|Y) = \frac{p(Y|x)p(x)}{p(Y)} = \frac{\prod_ip(y_i|x) p(x)}{\int \prod_ip(y_i|x)p(x) dx}
+        $$
+
+        1) 
+
+        
+    """
+    def __init__(self, fe: AbstractFeatureExtractor = None):
+        super().__init__(fe)
+
+
+    def predict(self, *args, **kwargs):
+        pass
+
+    def iter_approx_stationary_distr(self, *args, **kwargs):
+        pass
+
+    def posterior_distribution(self, *args, **kwargs):
+        pass
+
+    def validate(self, *args, **kwargs):
+        pass
+
+
+
+
+
+
+
+
+
+
+
+class MultipleObservationOMM(AbstractModel):
+    """
+        OMM := Observable Markov Model
+        One of the observable variables is interpreted as the hidden state.
+        This omits the training process, as we do have data to ``train'' the model on.
+        As we look at categorically distributed data, counting up occurences and normalizing
+        corresponds to calculating the MLE of a dirichlet posterior, given a categorical likelihood.
+        Hence, we omit calling the hmm.fit function and instantiate the individual Models from extracted counts.
+
+        Note: This implementation sums the weighted predictions of M Hidden Markov Models, where M is the number
+        of Markers (the number of datapoints per timestep). We provide no mathematical proof of correctness for
+        this approach, although we implement safety functionality that ensures the legitimacy of every predicted
+        optimal state sequence.
+
+        
+        TODO: rename unintuitive classes like probabilityVault into actual classnames... -> abstract the probabilityVault
+        object to an actual DirichletDitribution object?
+
+        TODO: implement hierarchical inference on hyper-parameters w_i for marker M_i
+
+        TODO: actually introduce probabilistic functionality into this model. This means actually drawing from a
+        dirichlet posterior rather than using the MLE.
+    
+    """
+    def __init__(self, dirichlet_posterior: DirichletMap, debug=False):
+        
+        super().__init__(dirichlet_posterior)
+
+        self.dirichlet_posterior = dirichlet_posterior
         self._debug = debug
 
     def iter_approx_stationary_distr(self, hidden_marker : str,
                                      current_distr : np.array,
                                      timesteps : int):
 
-        transmat = np.transpose(self._pv.transition_matrix(hidden_marker))
+        transmat = np.transpose(self.dirichlet_posterior.transition_matrix(hidden_marker))
         anterior_distr = np.zeros(shape=(transmat.shape[0], timesteps + 1))
         anterior_distr[:, 0] = current_distr
 
@@ -39,18 +103,15 @@ class RHMM(AbstractModel):
 
         return anterior_distr
 
-
-
-
     def predict(self, hidden_marker : str, layers : [str], observation : pd.DataFrame):
 
         # 0) bring observation in temporal order
-        dateid = self._pv.get_dateid_if_present()
+        dateid = self.dirichlet_posterior.get_dateid_if_present()
         if dateid is not None:
             observation = observation.sort_values(by=dateid)
 
         # 1) get all markers from looping through sections of cparser
-        layerinfo = self._pv.get_layerinfo_from_layers(hidden_marker, layers)
+        layerinfo = self.dirichlet_posterior.get_layerinfo_from_layers(hidden_marker, layers)
 
         markers = list(chain(*[layerinfo[l]['markers'].keys() for l in layerinfo.keys()]))
 
@@ -70,7 +131,7 @@ class RHMM(AbstractModel):
 
             try:
                 # try to encode the observation for the current marker
-                encoded = self._pv.encode(marker=observation_marker, series=observation[observation_marker])
+                encoded = self.dirichlet_posterior.encode(marker=observation_marker, series=observation[observation_marker])
             except:
                 # Encoding of observation has failed. We cannot infer an optimal sequence from an observation containing
                 # an unknown state.
@@ -85,7 +146,7 @@ class RHMM(AbstractModel):
                                              observation_marker,
                                              encoded)
 
-        distribution = np.zeros(shape=(self._pv.num_states_for_marker(hidden_marker), observation.shape[0]))
+        distribution = np.zeros(shape=(self.dirichlet_posterior.num_states_for_marker(hidden_marker), observation.shape[0]))
 
         # build weighted sum over optimal state sequences for different markers from different layers.
         for observation_marker, sequence in optimal_sequences.items():
@@ -127,13 +188,13 @@ class RHMM(AbstractModel):
         """
         
         # 0) bring observation in temporal order
-        dateid = self._pv.get_dateid_if_present()
+        dateid = self.dirichlet_posterior.get_dateid_if_present()
         if dateid is not None:
             observation = observation.sort_values(by=dateid)
         
         
         # 1) get all markers from looping through sections of cparser
-        layerinfo = self._pv.get_layerinfo_from_layers(hidden_marker, layers)
+        layerinfo = self.dirichlet_posterior.get_layerinfo_from_layers(hidden_marker, layers)
 
         markers = list(chain(*[layerinfo[l]['markers'].keys() for l in layerinfo.keys()]))
         
@@ -153,7 +214,7 @@ class RHMM(AbstractModel):
 
             try:
                 # try to encode the observation for the current marker
-                encoded = self._pv.encode(marker= observation_marker, series=observation[observation_marker])
+                encoded = self.dirichlet_posterior.encode(marker= observation_marker, series=observation[observation_marker])
             except:
                 # Encoding of observation has failed.
                 raise ValueError(f"We encountered an error while trying to encode the observation \n {observation[observation_marker]} \n \ "
@@ -183,15 +244,15 @@ class RHMM(AbstractModel):
 
     def __construct_hmm(self, hidden_marker : str,  obs_marker : str):
 
-        num_hidden_states = self._pv.num_states_for_marker(hidden_marker)
+        num_hidden_states = self.dirichlet_posterior.num_states_for_marker(hidden_marker)
         tmphmm = CategoricalHMM(n_components=num_hidden_states,
                                 init_params="",
                                 params="ste")
 
         # get initial state vector, transition matrix and emission matrix from pvault
-        tmphmm.startprob_ = self._pv.initial_state_distribution(hidden_marker)
-        tmphmm.transmat_ = self._pv.transition_matrix(hidden_marker)
-        tmphmm.emissionprob_ = self._pv.emission_matrix(hidden_marker, obs_marker)
+        tmphmm.startprob_ = self.dirichlet_posterior.initial_state_distribution(hidden_marker)
+        tmphmm.transmat_ = self.dirichlet_posterior.transition_matrix(hidden_marker)
+        tmphmm.emissionprob_ = self.dirichlet_posterior.emission_matrix(hidden_marker, obs_marker)
 
         return tmphmm
 
@@ -247,7 +308,7 @@ class RHMM(AbstractModel):
 
 
             try:
-                actual_sequence = self._pv.encode(marker=hidden_marker, series=observation[hidden_marker])
+                actual_sequence = self.dirichlet_posterior.encode(marker=hidden_marker, series=observation[hidden_marker])
             except:
                 print(f"Encoding of observation sequence {observation[hidden_marker]} of marker {hidden_marker} encountered \ "
                       f"an error. Most likely the sequence contains a previously unseen state. The sample will be skipped.")

@@ -5,18 +5,21 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from tqdm import tqdm
 from preprocessing import Preprocessor
 
 from base.abstract_feature_extractor import AbstractFeatureExtractor
 
-class ProbabilityVault(AbstractFeatureExtractor):
+class DirichletMap(AbstractFeatureExtractor):
 
     """
+    The Dirichlet Distribution is the conjugate prior for the categorical likelihood.
+    In this object, we store the parameters \alpha which define the Dirichlet distribution.
+    Additionally, we provide functionality, like querying the mode of the distribution.
+
     We want to archieve a structure that helps us easily query for probabilities,
     whilst not having to rely on huge matrices for storage.
 
-    _initial_state_probs : These are mappings from names of markers to distributions over states resembling
+    1) _initial_state_probs : These are mappings from names of markers to distributions over states resembling
     the starting state distribution.
 
     _initial_state_probs = {'marker1' :
@@ -27,7 +30,7 @@ class ProbabilityVault(AbstractFeatureExtractor):
 
                            }
 
-    _state_transition_probs : Here, we have a map from marker to a 2-d dictionary. This
+    2) _state_transition_probs : Here, we have a map from marker to a 2-d dictionary. This
     allows for quick access, serializability and relatively small memory space, since we expect the
     state transitions to be sparse for big state spaces
 
@@ -44,7 +47,7 @@ class ProbabilityVault(AbstractFeatureExtractor):
 
                                ... }
 
-    _observation_probs : Here, we have a map from marker to another marker to a 2-d dictionary.
+    3) _observation_probs : Here, we have a map from marker to another marker to a 2-d dictionary.
     Although weird looking, we avoid enormous memory allocation since we do not have to allocate M^2 * S^2 cells, where
     N is the mean number of Markers and S the mean number of States.
 
@@ -77,16 +80,25 @@ class ProbabilityVault(AbstractFeatureExtractor):
 
                            ... }
 
+    TODO: lazy evaluation of the probability maps. self._normalize_counts does not have to be called at construction time...
+
     """
 
-    def __init__(self, prep: Preprocessor, debug=False):
+    def __init__(self, prep: Preprocessor, debug=False, verbose=False):
 
         super().__init__(prep)
 
+        # counter dictionaries
+        self._initial_state_counts = dict()
+        self._state_transition_counts = dict()
+        self._observation_counts = dict()
+
+        # corresponding probabilities
         self._initial_state_probs = dict()
         self._state_transition_probs = dict()
         self._observation_probs = dict()
 
+        # preprocessor object and helper objects
         self._prep = prep
         self._label_encoders = prep._label_encoders
         self._cparser = prep._cparser
@@ -95,25 +107,32 @@ class ProbabilityVault(AbstractFeatureExtractor):
         self._layers = prep._valid_layers
         self._initialized = False
         self._debug = debug
+        self._verbose = verbose
     
     def extract_probabilities(self):
         
         starting_time = time.time()
         
-        self._setup_prob_dicts()
 
+        self._setup_counts_dicts()
         self._extract_counts()
 
+        # copy dictionaries
+        self._initial_state_probs = self._initial_state_counts.copy()
+        self._state_transition_probs = self._state_transition_counts.copy()
+        self._observation_probs = self._observation_counts.copy()
+        
         self._normalize_counts()
 
         duration_sec = time.time() - starting_time
 
-        hrs  = duration_sec // 3600
-        mins = (duration_sec // 60) % 60
-        secs = duration_sec % 60
+        if self._verbose:
+            hrs  = duration_sec // 3600
+            mins = (duration_sec // 60) % 60
+            secs = duration_sec % 60
 
-        print(f'Extraction of probabilities successful. Elapsed time: {hrs} hours, {mins} minutes and {secs} seconds')
-        
+            print(f'Extraction of probabilities successful. Elapsed time: {hrs} hours, {mins} minutes and {secs} seconds')
+            
         self._initialized = True
 
     @staticmethod
@@ -137,9 +156,9 @@ class ProbabilityVault(AbstractFeatureExtractor):
         This results in a probability distribution over the respective states of markers.
 
         """
-
-        print('Calculating initial state probabilities.')
-        for marker, counts in tqdm(self._initial_state_probs.items()):
+        if self._debug:
+            print('Calculating initial state probabilities.')
+        for marker, counts in self._initial_state_probs.items():
             
             _sum = sum(counts.values())
 
@@ -148,9 +167,10 @@ class ProbabilityVault(AbstractFeatureExtractor):
                 
             normalization_factor = 1.0 / _sum
             self._initial_state_probs[marker] = {k : normalization_factor*v for k,v in counts.items()}
-
-        print('Calculating state transition probabilities.')
-        for marker, state_dict in tqdm(self._state_transition_probs.items()):
+        
+        if self._debug:
+            print('Calculating state transition probabilities.')
+        for marker, state_dict in self._state_transition_probs.items():
 
             for state, counts in state_dict.items():
 
@@ -169,9 +189,9 @@ class ProbabilityVault(AbstractFeatureExtractor):
                     
                 normalization_factor = 1.0 / _sum
                 self._state_transition_probs[marker][state] = {k : normalization_factor*v for k,v in counts.items()}
-
-        print('Calculating observation probabilities.')
-        for marker1, m1_dict in tqdm(self._observation_probs.items()):
+        if self._debug:
+            print('Calculating observation probabilities.')
+        for marker1, m1_dict in self._observation_probs.items():
             for marker2, s1_dict in m1_dict.items():
                 for state, counts in s1_dict.items():
 
@@ -196,7 +216,6 @@ class ProbabilityVault(AbstractFeatureExtractor):
         To calculate the probabilities, we first have to count occurences of observations or state transitions.
         This is done in this function. We iterate over the dataframes, which are grouped by experiment, and
         increment a counter inside a dictionary.
-
         """
 
         if 'markerconfig_metainfo' in self._cparser and 'groupby' in self._cparser['markerconfig_metainfo']:
@@ -206,9 +225,10 @@ class ProbabilityVault(AbstractFeatureExtractor):
             experiments = [self._df]
 
 
-
-        print('Extracting counts. This may take some time.')
-        for df in tqdm(experiments):
+        if self._debug:
+            print('Extracting counts. This may take some time.')
+    
+        for df in experiments:
             if df.empty:
                 continue
 
@@ -227,7 +247,7 @@ class ProbabilityVault(AbstractFeatureExtractor):
 
                 current_state = first_row[marker1]
 
-                self._incr_init_state_probs_count(marker1, current_state)
+                self._incr_init_state_count(marker1, current_state)
 
                 for marker2 in self._markers:
                     if marker1 == marker2:
@@ -235,7 +255,7 @@ class ProbabilityVault(AbstractFeatureExtractor):
 
                     other_state = first_row[marker2]
 
-                    self._incr_obs_probs_count(marker1, marker2, current_state, other_state)
+                    self._incr_obs_count(marker1, marker2, current_state, other_state)
 
 
             """
@@ -262,7 +282,7 @@ class ProbabilityVault(AbstractFeatureExtractor):
 
                     # 1) increment the state transition probability count
 
-                    self._incr_state_trans_probs_count(marker1, last_state, current_state)
+                    self._incr_state_trans_count(marker1, last_state, current_state)
 
 
                     for marker2 in self._markers:
@@ -274,14 +294,14 @@ class ProbabilityVault(AbstractFeatureExtractor):
 
                         # 2) increment the observation probability count
 
-                        self._incr_obs_probs_count(marker1, marker2, current_state, other_state)
+                        self._incr_obs_count(marker1, marker2, current_state, other_state)
 
                 # 3) set the last_row dictionary to be the current row
                 last_row = current_row.to_dict()
 
         return
 
-    def _setup_prob_dicts(self):
+    def _setup_counts_dicts(self):
         """
         Constructing the probability maps, we take care to not preemtively assign empty placeholders
         for values which are calculated later on. This would completely negate the positive effect of
@@ -293,58 +313,54 @@ class ProbabilityVault(AbstractFeatureExtractor):
         for marker1 in self._markers:
 
             marker1_num_states = self._label_encoders[marker1].classes_.shape[0]
-            self._initial_state_probs[marker1] = {}
-            self._state_transition_probs[marker1] = {i : {} for i in range(marker1_num_states)}
-            self._observation_probs[marker1] = {}
+            self._initial_state_counts[marker1] = {}
+            self._state_transition_counts[marker1] = {i : {} for i in range(marker1_num_states)}
+            self._observation_counts[marker1] = {}
 
             for marker2 in self._markers:
 
                 if marker1 == marker2:
                     continue
 
-                self._observation_probs[marker1][marker2] = {i : {} for i in range(marker1_num_states)}
+                self._observation_counts[marker1][marker2] = {i : {} for i in range(marker1_num_states)}
 
         return
 
-    def _incr_obs_probs_count(self, marker1, marker2, current_state, other_state):
+    def _incr_obs_count(self, marker1, marker2, current_state, other_state):
 
         if marker1 == marker2:
             return
 
-        if current_state not in self._observation_probs[marker1][marker2]:
-            self._observation_probs[marker1][marker2][current_state] = {}
+        if current_state not in self._observation_counts[marker1][marker2]:
+            self._observation_counts[marker1][marker2][current_state] = {}
 
-        incremented_value = self._observation_probs[marker1][marker2][current_state].get(other_state, 0) + 1
-        self._observation_probs[marker1][marker2][current_state][other_state] = incremented_value
-
-        return
-
-    def _incr_state_trans_probs_count(self, marker, last_state, current_state):
-
-        assert last_state in self._state_transition_probs[marker]
-
-        incremented_value = self._state_transition_probs[marker][last_state].get(current_state, 0) + 1
-        self._state_transition_probs[marker][last_state][current_state] = incremented_value
+        incremented_value = self._observation_counts[marker1][marker2][current_state].get(other_state, 0) + 1
+        self._observation_counts[marker1][marker2][current_state][other_state] = incremented_value
 
         return
 
-    def _incr_init_state_probs_count(self, marker, current_state):
+    def _incr_state_trans_count(self, marker, last_state, current_state):
 
-        assert marker in self._initial_state_probs
+        assert last_state in self._state_transition_counts[marker]
 
-        incremented_value = self._initial_state_probs[marker].get(current_state, 0) + 1
-        self._initial_state_probs[marker][current_state] = incremented_value
+        incremented_value = self._state_transition_counts[marker][last_state].get(current_state, 0) + 1
+        self._state_transition_counts[marker][last_state][current_state] = incremented_value
 
         return
 
+    def _incr_init_state_count(self, marker, current_state):
 
+        assert marker in self._initial_state_counts
+
+        incremented_value = self._initial_state_counts[marker].get(current_state, 0) + 1
+        self._initial_state_counts[marker][current_state] = incremented_value
+
+        return
 
     def to_pickle(self, path_to_pickle : str):
 
         with open(path_to_pickle, 'wb') as file:
             pickle.dump(self, file, protocol=pickle.HIGHEST_PROTOCOL)
-
-
 
     def get_initial_prob(self, marker, state):
         
@@ -396,7 +412,7 @@ class ProbabilityVault(AbstractFeatureExtractor):
         return self._observation_probs[marker1][marker2][hidden].get(observed, 0.0)
         
     def get_isp_dict(self):
-        
+
         return self._initial_state_probs
     
     def get_stp_dict(self):
@@ -572,7 +588,6 @@ class ProbabilityVault(AbstractFeatureExtractor):
                         f'Sum over columns of stochastic matrix was out of valid\
                          bounds for marker1 {marker1}, marker2 {marker2}, for row {i} with value {_sum}')
         return ret
-
 
     def human_readable(self, rows_marker, cols_marker, matrix):
 
