@@ -5,7 +5,7 @@ import numpy as np
 from tqdm import tqdm
 from itertools import chain
 from source.pyth.Preprocessing.pvault import ProbabilityVault
-from hmmlearn.hmm import CategoricalHMM
+from hmmlearn.hmm import MultinomialHMM
 from sklearn.metrics import f1_score
 
 
@@ -184,9 +184,7 @@ class RHMM(AbstractModel):
     def __construct_hmm(self, hidden_marker : str,  obs_marker : str):
 
         num_hidden_states = self._pv.num_states_for_marker(hidden_marker)
-        tmphmm = CategoricalHMM(n_components=num_hidden_states,
-                                init_params="",
-                                params="ste")
+        tmphmm = MultinomialHMM(n_components=num_hidden_states, init_params="", params="ste")
 
         # get initial state vector, transition matrix and emission matrix from pvault
         tmphmm.startprob_ = self._pv.initial_state_distribution(hidden_marker)
