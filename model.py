@@ -24,7 +24,10 @@ class MultipleObservationHMM(AbstractModel):
             p(x|Y) = \frac{p(Y|x)p(x)}{p(Y)} = \frac{\prod_ip(y_i|x) p(x)}{\int \prod_ip(y_i|x)p(x) dx}
         $$
 
-        1) 
+        1) instead of fully parameterized models we are handed the dataset
+        2) we assume a degenerative model.
+        3) numerically optimize for model parameters lambda
+        4)
 
         
     """
@@ -42,6 +45,7 @@ class MultipleObservationHMM(AbstractModel):
         pass
 
     def validate(self, *args, **kwargs):
+        warnings.warn('validate() was called on an instance of MultipleObservationHMM. Not yet supported. Skipping.')
         pass
 
 
@@ -68,13 +72,10 @@ class MultipleObservationOMM(AbstractModel):
         this approach, although we implement safety functionality that ensures the legitimacy of every predicted
         optimal state sequence.
 
-        
-        TODO: rename unintuitive classes like probabilityVault into actual classnames... -> abstract the probabilityVault
-        object to an actual DirichletDitribution object?
 
-        TODO: implement hierarchical inference on hyper-parameters w_i for marker M_i
+        TODO (low prio): implement hierarchical inference on hyper-parameters w_i for marker M_i
 
-        TODO: actually introduce probabilistic functionality into this model. This means actually drawing from a
+        TODO (low prio): actually introduce probabilistic functionality into this model. This means actually drawing from a
         dirichlet posterior rather than using the MLE.
     
     """

@@ -4,10 +4,53 @@ import pickle
 import warnings
 import numpy as np
 import pandas as pd
+from base.abstract_preprocessor import AbstractPreprocessor
 
 from preprocessing import Preprocessor
 
 from base.abstract_feature_extractor import AbstractFeatureExtractor
+
+
+class WrappedPreprocessor(AbstractFeatureExtractor):
+
+    """
+        For the Hidden Markov Model, we're not counting up occurences but training on the
+        data itself. This object does not provide the initial state probabilities, transition and observation
+        matrices.
+    """
+    def __init__(self, prep: AbstractPreprocessor, debug=False, verbose=False):
+        super().__init__(prep)
+
+        # preprocessor object and helper objects
+        self._prep = prep
+        self._label_encoders = prep._label_encoders
+        self._cparser = prep._cparser
+        self._df = prep._df
+        self._markers = prep._valid_markers
+        self._layers = prep._valid_layers
+        self._initialized = False
+        self._debug = debug
+        self._verbose = verbose
+        self.experiments = None
+
+        self.split_experiments()
+
+
+
+    def split_experiments(self):
+        """
+            Given the dataframe of the preprocessor object, we want to group the experiments
+            collected from possibly multiple runs into individual training datapoints.
+            
+        """
+        if 'markerconfig_metainfo' in self._cparser and 'groupby' in self._cparser['markerconfig_metainfo']:
+            tmpdf = self._df.groupby(self._cparser['markerconfig_metainfo']['groupby'])
+            self.experiments = [tmpdf.get_group(group) for group in tmpdf.groups]
+        else:
+            self.experiments = [self._df]
+
+
+
 
 class DirichletMap(AbstractFeatureExtractor):
 
