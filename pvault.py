@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from typing import List
 from tqdm import tqdm
 from preprocessing import AbstractPreprocessor, Preprocessor
 from abc import ABC, abstractmethod
@@ -422,7 +423,7 @@ class ProbabilityVault(AbstractFeatureExtractor):
 
         return self._observation_probs
 
-    def get_layerinfo_from_layers(self, hidden_marker : str, layers : [str]) -> [str]:
+    def get_layerinfo_from_layers(self, hidden_marker : str, layers : List[str]) -> dict:
 
         # remove any layers which have never appeared before
         for layer in layers:

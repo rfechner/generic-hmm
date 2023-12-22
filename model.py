@@ -1,3 +1,4 @@
+from copy import deepcopy
 import warnings
 import pandas as pd
 import numpy as np
@@ -290,7 +291,7 @@ class RHMM(AbstractModel):
                 return layer
         return None
     
-    def optim_layerweights(self, layerinfo : dict, layers : List[str], observation, hidden_marker):
+    def optim_layerweights(self, layers : List[str], observation : pd.DataFrame, hidden_marker : str):
 
         # set up params
         # loop -> calc likelihood hmm._compute_likelihood(observation)
@@ -301,7 +302,6 @@ class RHMM(AbstractModel):
         dateid = self._pv.get_dateid_if_present()
         if dateid is not None:
             observation = observation.sort_values(by=dateid)
-        
         
         # 1) get all markers from looping through sections of cparser
         layerinfo = self._pv.get_layerinfo_from_layers(hidden_marker, layers)
@@ -340,7 +340,7 @@ class RHMM(AbstractModel):
 
         # TODO: write function to optimize -> get weights
         params = []
-        lengths = [len(layer['markers']) for layer in layerinfo.keys()]
+        lengths = [len(layerinfo[layer]['markers']) for layer in layerinfo.keys()]
         sections = np.cumsum(lengths)[:-1]
 
         # initial parameters
@@ -348,30 +348,31 @@ class RHMM(AbstractModel):
             for m, d in layerinfo[layer]['markers'].items():
                 params.append(d['weight'])
 
+        # TODO: weight regularizer?
         def funct(params):
-
             params_ = np.concatenate([softmax(p) for p in \
                        np.split(params, indices_or_sections=sections)])
             
-            return (params_ * np.array(list(likelihoods.values()))).sum()
-        
-        def func(params):
-            
-            likelihood = 0
-            lengths = [len(layer['markers']) for layer in layerinfo.keys()]
-            sections = np.insert(np.cumsum(lengths), 0, 0)
-
-            # get params from np.array into dict
-            for il, layer in enumerate(layerinfo.keys()):
-                cur_layer_params = params[sections[il]: sections[il + 1]]
-                lparams = softmax(cur_layer_params)
-                for i, mname in layerinfo[layer]['markers'].keys():
-                    likelihood += likelihoods[mname] * lparams[i] * layer_weight
-            
-            return likelihood
+            scaled_likelihoods = (params_ * np.array(list(likelihoods.values()))).sum()
+            regularizer = np.sum(params_**2)
+            return scaled_likelihoods + regularizer
         
         optim_result = minimize(funct, x0 = params)
-        return optim_result
+
+        # split params into sections, apply softmax section wise
+        params = np.concatenate([
+            softmax(section) for section in np.split(optim_result.x, indices_or_sections=sections)
+        ])
+
+        new_layerinfo = deepcopy(layerinfo)
+
+        it = iter(params)
+
+        for layer in new_layerinfo.keys():
+            for m, d in new_layerinfo[layer]['markers'].items():
+                d['weight'] = next(it)
+
+        return new_layerinfo, optim_result
         
 
 

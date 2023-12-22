@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 import os
 
+from typing import List
 from preprocessing import Preprocessor
 from pvault import ProbabilityVault
 from model import RHMM
@@ -451,9 +452,23 @@ class Controller(AbstractController):
 
         return scores
 
+    def optim_layerweights(self, path_to_data : str,
+                            path_to_config : str,
+                            csv_delimiter : str,
+                            layers : List[str],
+                            hidden_marker : str):
+        
+        self.construct(path_to_data=path_to_data,
+                           path_to_config=path_to_config,
+                           csv_delimiter=csv_delimiter)
+        
+        observation = pd.read_csv(path_to_data, delimiter=csv_delimiter)
+        new_layerinfo, optim_res = self.model.optim_layerweights(layers=layers, observation=observation, hidden_marker=hidden_marker)
+
+        return new_layerinfo, optim_res
 
 
-    def __check_valid_layer_marker_combination(self, layers : [str], hidden_marker : str):
+    def __check_valid_layer_marker_combination(self, layers : List[str], hidden_marker : str):
         layerinfo = self.pv.get_layerinfo_from_layers(hidden_marker=hidden_marker, layers=layers)
 
         if len(layerinfo.keys()) == 0 or \
