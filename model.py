@@ -2,10 +2,15 @@ import warnings
 import pandas as pd
 import numpy as np
 
+
+from scipy.optimize import minimize
+from scipy.special import softmax
+
 from tqdm import tqdm
 from itertools import chain
 from hmmlearn.hmm import CategoricalHMM
 from sklearn.metrics import f1_score
+from typing import List
 
 from abc import ABC, abstractmethod
 from pvault import AbstractFeatureExtractor, ProbabilityVault
@@ -186,8 +191,7 @@ class RHMM(AbstractModel):
 
         warnings.warn('EXPERIMENTAL CODE: layer weights are not applied, since the code for layer-weights is still missing. \
         The distr of weights over the layers is an equal distribution for now.')
-        
-        
+
         # 3) apply weights to the distributions, sum up the distributions
         layer_weight = 1.0 / len(layerinfo.keys())
         for layer in layerinfo.keys():
@@ -285,3 +289,92 @@ class RHMM(AbstractModel):
             if marker in d['markers'].keys():
                 return layer
         return None
+    
+    def optim_layerweights(self, layerinfo : dict, layers : List[str], observation, hidden_marker):
+
+        # set up params
+        # loop -> calc likelihood hmm._compute_likelihood(observation)
+        # update gradients
+        # return new params
+
+        # 0) bring observation in temporal order
+        dateid = self._pv.get_dateid_if_present()
+        if dateid is not None:
+            observation = observation.sort_values(by=dateid)
+        
+        
+        # 1) get all markers from looping through sections of cparser
+        layerinfo = self._pv.get_layerinfo_from_layers(hidden_marker, layers)
+
+        markers = list(chain(*[layerinfo[l]['markers'].keys() for l in layerinfo.keys()]))
+        
+        unique_markers = set()
+        
+        for m in markers:
+            if m not in unique_markers:
+                unique_markers.add(m)
+            else:
+                warnings.warn(f'WARNING: It seems, that the marker {m} was found in more than one layer. Consecutive consultations \
+                        of markers are ignored. This may lead to unexpected behaviour in model predictions')
+        
+        # 2) for each marker, call forward_probs to get the distribution over hidden states for one marker
+        distributions = {}
+        
+        for observation_marker in unique_markers:
+
+            try:
+                # try to encode the observation for the current marker
+                encoded = self._pv.encode(marker= observation_marker, series=observation[observation_marker])
+            except:
+                # Encoding of observation has failed.
+                raise ValueError(f"We encountered an error while trying to encode the observation \n {observation[observation_marker]} \n \ "
+                                 f"This error occurs, when we encounter a new, before unseen state. Please either remove the observation with \ "
+                                 f"the unseen state, or adjust the prediction layers accordingly.")
+
+            # construct HMM from hmmlearn library. Call predict_proba, the result of the call will
+            # be the distribution over hidden states for all timesteps
+            distributions[observation_marker] = self.__single_marker_forward_probs(hidden_marker, observation_marker, encoded)
+
+        likelihoods = {mname : d[:, -1].sum() for mname, d in distributions.items()}
+        layer_weight = 1.0 / len(layerinfo.keys())
+
+        # TODO: write function to optimize -> get weights
+        params = []
+        lengths = [len(layer['markers']) for layer in layerinfo.keys()]
+        sections = np.cumsum(lengths)[:-1]
+
+        # initial parameters
+        for layer in layerinfo.keys():
+            for m, d in layerinfo[layer]['markers'].items():
+                params.append(d['weight'])
+
+        def funct(params):
+
+            params_ = np.concatenate([softmax(p) for p in \
+                       np.split(params, indices_or_sections=sections)])
+            
+            return (params_ * np.array(list(likelihoods.values()))).sum()
+        
+        def func(params):
+            
+            likelihood = 0
+            lengths = [len(layer['markers']) for layer in layerinfo.keys()]
+            sections = np.insert(np.cumsum(lengths), 0, 0)
+
+            # get params from np.array into dict
+            for il, layer in enumerate(layerinfo.keys()):
+                cur_layer_params = params[sections[il]: sections[il + 1]]
+                lparams = softmax(cur_layer_params)
+                for i, mname in layerinfo[layer]['markers'].keys():
+                    likelihood += likelihoods[mname] * lparams[i] * layer_weight
+            
+            return likelihood
+        
+        optim_result = minimize(funct, x0 = params)
+        return optim_result
+        
+
+
+
+
+
