@@ -1,11 +1,11 @@
+from ast import Dict
 from copy import deepcopy
 import warnings
 import pandas as pd
 import numpy as np
-
+import numba
 
 from scipy.optimize import minimize
-from scipy.special import softmax
 
 from tqdm import tqdm
 from itertools import chain
@@ -67,7 +67,7 @@ class RHMM(AbstractModel):
 
 
 
-    def predict(self, hidden_marker : str, layers : [str], observation : pd.DataFrame):
+    def predict(self, hidden_marker : str, layers : [str], observation : pd.DataFrame, layerinfo : dict = None):
 
         # 0) bring observation in temporal order
         dateid = self._pv.get_dateid_if_present()
@@ -75,7 +75,8 @@ class RHMM(AbstractModel):
             observation = observation.sort_values(by=dateid)
 
         # 1) get all markers from looping through sections of cparser
-        layerinfo = self._pv.get_layerinfo_from_layers(hidden_marker, layers)
+        if layerinfo is None:
+            layerinfo = self._pv.get_layerinfo_from_layers(hidden_marker, layers)
 
         markers = list(chain(*[layerinfo[l]['markers'].keys() for l in layerinfo.keys()]))
 
@@ -125,7 +126,7 @@ class RHMM(AbstractModel):
 
         return optimal_sequence
 
-    def posterior_distribution(self, hidden_marker : str, layers : [str], observation : pd.DataFrame):
+    def posterior_distribution(self, hidden_marker : str, layers : [str], observation : pd.DataFrame, layerinfo : dict = None):
         """
         The posterior distribution over the states of a hidden_marker for the duration of the observation
         sequence is calculated with the forward-algorithm respectivly for each observation fragment.
@@ -158,7 +159,8 @@ class RHMM(AbstractModel):
         
         
         # 1) get all markers from looping through sections of cparser
-        layerinfo = self._pv.get_layerinfo_from_layers(hidden_marker, layers)
+        if layerinfo is None:
+            layerinfo = self._pv.get_layerinfo_from_layers(hidden_marker, layers)
 
         markers = list(chain(*[layerinfo[l]['markers'].keys() for l in layerinfo.keys()]))
         
@@ -245,7 +247,7 @@ class RHMM(AbstractModel):
 
         return forward_probs
 
-    def validate(self, groups : [pd.DataFrame], layers : [str], hidden_marker : str):
+    def validate(self, groups : [pd.DataFrame], layers : [str], hidden_marker : str, layerinfo : dict = None):
         """
         groups: A list of single, unencoded DataFrames which are evaluated one by one.
 
@@ -349,12 +351,13 @@ class RHMM(AbstractModel):
                 params.append(d['weight'])
 
         # TODO: weight regularizer?
-        def funct(params):
-            params_ = np.concatenate([softmax(p) for p in \
+        def funct(params, lambda_=1.0):
+            params = np.array(params)
+            params_ : np.ndarray = np.concatenate([softmax(p) for p in \
                        np.split(params, indices_or_sections=sections)])
             
-            scaled_likelihoods = (params_ * np.array(list(likelihoods.values()))).sum()
-            regularizer = np.sum(params_**2)
+            scaled_likelihoods :float= (params_ * np.array(list(likelihoods.values()))).sum()
+            regularizer : float = lambda_ * -1.0 * entropy(params)
             return scaled_likelihoods + regularizer
         
         optim_result = minimize(funct, x0 = params)
@@ -374,8 +377,16 @@ class RHMM(AbstractModel):
 
         return new_layerinfo, optim_result
         
+@numba.njit
+def softmax(params):
+    max_elem = np.max(params)
+    exps = np.exp(params - max_elem)
+    return exps / (sum(exps) + 1e-8)
 
-
+@numba.njit
+def entropy(params):
+    soft = softmax(params)
+    return -np.sum(soft * np.log(soft))
 
 
 

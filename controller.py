@@ -52,7 +52,8 @@ class Controller(AbstractController):
                                   csv_delimiter : str,
                                   layers : [str],
                                   hidden_marker : str,
-                                  timesteps : int):
+                                  timesteps : int,
+                                  layerinfo : dict = None):
         """
 
         This function returns a rough estimate of the stationary distribution, extrapolated for some t timesteps,
@@ -78,12 +79,13 @@ class Controller(AbstractController):
             print("Please supply a valid .csv file and a correct path.")
             return
 
-        self.__check_valid_layer_marker_combination(layers, hidden_marker)
+        self.__check_valid_layer_marker_combination(layers, hidden_marker, layerinfo = layerinfo)
 
         post_distr = self.__calc_post_distr(path_to_observation=path_to_observation,
                                             csv_delimiter=csv_delimiter,
                                             layers=layers,
-                                            hidden_marker=hidden_marker)
+                                            hidden_marker=hidden_marker,
+                                            layerinfo = layerinfo)
 
 
         current_distribution = post_distr[:, -1]
@@ -131,7 +133,7 @@ class Controller(AbstractController):
         return optimal_sequence
 
     def __calc_post_distr(self, path_to_observation: str, csv_delimiter: str, layers: [str],
-                                    hidden_marker: str):
+                                    hidden_marker: str, layerinfo : dict = None):
 
         """
         This function returns a weighted prediction result. For each prediction marker inside the layers the forward algorithm is used
@@ -156,19 +158,21 @@ class Controller(AbstractController):
             print("Please supply a valid .csv file and a correct path.")
             return
 
-        self.__check_valid_layer_marker_combination(layers, hidden_marker)
+        self.__check_valid_layer_marker_combination(layers, hidden_marker, layerinfo=layerinfo)
 
         observation = pd.read_csv(path_to_observation, delimiter=csv_delimiter)
         distr = self.model.posterior_distribution(hidden_marker=hidden_marker,
                                                   layers=layers,
-                                                  observation=observation)
+                                                  observation=observation, 
+                                                  layerinfo=layerinfo)
         return distr
 
     def plot_stationary_distribution(self, path_to_observation : str,
                                      csv_delimiter : str,
                                      layers : [str],
                                      hidden_marker : str,
-                                     timesteps : int):
+                                     timesteps : int,
+                                     layerinfo : dict = None):
 
         """
         This function returns a visulaization of an approximation towards
@@ -188,7 +192,8 @@ class Controller(AbstractController):
                                                         csv_delimiter=csv_delimiter,
                                                         layers=layers,
                                                         hidden_marker=hidden_marker,
-                                                        timesteps = timesteps)
+                                                        timesteps = timesteps,
+                                                        layerinfo=layerinfo)
 
         num_hidden_states = self.pv.num_states_for_marker(hidden_marker)
         timesteps = anterior_distr.shape[1]
@@ -326,7 +331,7 @@ class Controller(AbstractController):
 
         return self.model
 
-    def validate(self, path_to_validation_data : str, csv_delimiter : str, layers : [str], hidden_marker : str):
+    def validate(self, path_to_validation_data : str, csv_delimiter : str, layers : [str], hidden_marker : str, layerinfo : dict = None):
         """
         @param path_to_validation_data: string path to a .csv file containing the multivariate time series
         @param csv_delimiter: delimiter contained in the precified .csv file
@@ -345,12 +350,12 @@ class Controller(AbstractController):
             print("Please supply a valid .csv file and a correct path.")
             return
 
-        self.__check_valid_layer_marker_combination(layers, hidden_marker)
+        self.__check_valid_layer_marker_combination(layers, hidden_marker, layerinfo=layerinfo)
 
         validation_df = pd.read_csv(path_to_validation_data, delimiter=csv_delimiter)
         validation_samples = self.prep.group_df(validation_df)
 
-        f1_score = self.model.validate(groups=validation_samples, layers=layers, hidden_marker=hidden_marker)
+        f1_score = self.model.validate(groups=validation_samples, layers=layers, hidden_marker=hidden_marker, layerinfo=layerinfo)
 
         print(f"The multiclass F1-Score was calculated. The resulting score is an average over all samples. "
               f"F1-Score : {f1_score}")
@@ -362,7 +367,8 @@ class Controller(AbstractController):
                             path_to_config : str,
                             csv_delimiter : str,
                             layers :[str],
-                            hidden_marker : str):
+                            hidden_marker : str,
+                            new_layerweights : dict = None):
 
         """
         @param k: the parameter k in k-fold-validation.
@@ -441,7 +447,8 @@ class Controller(AbstractController):
             f1_score = self.validate(path_to_validation_data=validate_path,
                           csv_delimiter=csv_delimiter,
                           layers = layers,
-                          hidden_marker=hidden_marker)
+                          hidden_marker=hidden_marker,
+                          layerinfo=new_layerweights)
 
             scores.append(f1_score)
             __del_temp_files(temp_dir_name)
@@ -468,8 +475,10 @@ class Controller(AbstractController):
         return new_layerinfo, optim_res
 
 
-    def __check_valid_layer_marker_combination(self, layers : List[str], hidden_marker : str):
-        layerinfo = self.pv.get_layerinfo_from_layers(hidden_marker=hidden_marker, layers=layers)
+    def __check_valid_layer_marker_combination(self, layers : List[str], hidden_marker : str, layerinfo : dict = None):
+        
+        if layerinfo is None:
+            layerinfo = self.pv.get_layerinfo_from_layers(hidden_marker=hidden_marker, layers=layers)
 
         if len(layerinfo.keys()) == 0 or \
             sum([len(layerinfo[layername]['markers'].keys()) for layername in layerinfo.keys()]) == 0:
