@@ -354,13 +354,12 @@ class Controller(AbstractController):
 
         validation_df = pd.read_csv(path_to_validation_data, delimiter=csv_delimiter)
         validation_samples = self.prep.group_df(validation_df)
+        
+        cmetrics, creport = self.model.validate(groups=validation_samples, layers=layers, hidden_marker=hidden_marker, layerinfo=layerinfo)
+        print("=========== Classification Report ===========\n")
+        print(creport)
 
-        f1_score = self.model.validate(groups=validation_samples, layers=layers, hidden_marker=hidden_marker, layerinfo=layerinfo)
-
-        print(f"The multiclass F1-Score was calculated. The resulting score is an average over all samples. "
-              f"F1-Score : {f1_score}")
-
-        return f1_score
+        return cmetrics
 
     def kfold_cross_validation(self, k : int,
                             path_to_data : str,
@@ -424,7 +423,7 @@ class Controller(AbstractController):
 
             return train_path, validate_path
 
-        scores = []
+        p_scores, r_scores, f1_scores, cmatrices = [], [], [], []
         temp_df = pd.read_csv(path_to_data, delimiter=csv_delimiter).groupby(groupby)
         groups = [temp_df.get_group(x) for x in temp_df.groups]
         chunk_length = len(groups) // k
@@ -444,20 +443,24 @@ class Controller(AbstractController):
                 __cleanup(temp_dir_name)
                 raise
 
-            f1_score = self.validate(path_to_validation_data=validate_path,
+            cmetrics = self.validate(path_to_validation_data=validate_path,
                           csv_delimiter=csv_delimiter,
                           layers = layers,
                           hidden_marker=hidden_marker,
                           layerinfo=new_layerweights)
+            
+            p_scores.append(cmetrics['precision'])
+            r_scores.append(cmetrics['recall'])
+            f1_scores.append(cmetrics['f1'])
+            cmatrices.append(cmetrics['confusion_matrix'])
 
-            scores.append(f1_score)
             __del_temp_files(temp_dir_name)
 
         __cleanup(temp_dir_name)
 
-        print(f"The mean score is {np.mean(scores)} with a standart deviation of {np.std(scores)}.")
+        print(f"Metrics:\nF1: {np.mean(f1_scores):2f} ± {np.std(f1_scores, ddof=1):2f}\t Recall: {np.mean(r_scores):2f} ± {np.std(r_scores, ddof=1):2f}\t Precision: {np.mean(p_scores):2f} ± {np.std(p_scores, ddof=1):2f}")
 
-        return scores
+        return f1_scores, r_scores, p_scores, cmatrices
 
     def optim_layerweights(self, path_to_data : str,
                             path_to_config : str,

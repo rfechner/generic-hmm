@@ -10,7 +10,7 @@ from scipy.optimize import minimize
 from tqdm import tqdm
 from itertools import chain
 from hmmlearn.hmm import CategoricalHMM
-from sklearn.metrics import f1_score
+from sklearn.metrics import precision_score, recall_score, f1_score, classification_report, confusion_matrix
 from typing import List
 
 from abc import ABC, abstractmethod
@@ -285,7 +285,16 @@ class RHMM(AbstractModel):
             y_pred = np.concatenate([y_pred, optimal_sequence])
             y_true = np.concatenate([y_true, actual_sequence])
 
-        return f1_score(y_true=y_true, y_pred=y_pred, average='macro')
+        series = list(range(len(set(y_true))))
+        target_names = [str(elem) for elem in 
+                        self._pv._prep.decode_series(marker=hidden_marker, series=series)]
+
+        print(series, target_names)
+        return {'precision' : precision_score(y_true=y_true, y_pred=y_pred, average='macro'), 
+                'recall' : recall_score(y_true=y_true, y_pred=y_pred, average='macro'), 
+                'f1' : f1_score(y_true=y_true, y_pred=y_pred, average='macro'),
+                'confusion_matrix' : confusion_matrix(y_true, y_pred)} , classification_report(y_true, y_pred, labels=series, target_names=target_names)
+        
 
     def __get_layer_for_marker(self, layerinfo : dict, marker):
         for layer, d in layerinfo.items():
