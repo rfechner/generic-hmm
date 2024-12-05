@@ -58,14 +58,14 @@ https://github.com/rfechner/generic-hmm/issues/new.
 If you use this work, please cite:
 
 ```bibtex
-@article{dorpinghaus2022context,
-  title={Context mining and graph queries on giant biomedical knowledge graphs},
-  author={D{\"o}rpinghaus, Jens and Stefan, Andreas and Schultz, Bruce and Jacobs, Marc},
-  journal={Knowledge and Information Systems},
-  volume={64},
-  number={5},
-  pages={1239--1262},
-  year={2022},
-  publisher={Springer}
+@article{fechner2024ensemble,
+  title={Ensemble of HMMs for Sequence Prediction on Multivariate Biomedical Data},
+  author={Fechner, Richard and D{\"o}rpinghaus, Jens and Rockenfeller, Robert and Faber, Jennifer},
+  journal={BioMedInformatics},
+  volume={4},
+  number={3},
+  pages={1672--1691},
+  year={2024},
+  publisher={MDPI}
 }
 ```
